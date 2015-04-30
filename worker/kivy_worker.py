@@ -64,4 +64,63 @@ class KivyWorker(Widget, Worker):
         """handle Model mission and do the render"""
         raise NotImplementedError("Please Implement " + self.__class__.__name__ + "._execute_a_render_mission()")
         
+
+
+if __name__ == '__main__':
+    print __doc__
     
+    class TestModel(Worker):
+
+        def __init__(self):
+            super(TestModel, self).__init__()
+            self._add_sqrt = 0
+
+        def _routine(self):
+            missions = self.mission_queue
+            while not missions.empty():
+                mission = missions.get_nowait()
+                self._add_sqrt += mission['show square']
+
+        def _export_missions(self, caller):
+            if self._add_sqrt > 0:
+                mission = {'add_rect':self._add_sqrt}
+                self._add_sqrt -= 1
+                return [mission]
+            return []
+
+        
+    class TestWindow(KivyWorker):
+
+        def __init__(self):
+            super(TestWindow, self).__init__()
+            self._signal_to_model = []
+
+        def _execute_a_keyboard_mission(self, mission):
+            key_code = mission['key_code']
+            if key_code[1] == 'up':
+                sig = {'show square':1}
+            else:
+                exit()
+            self._signal_to_model.append(sig)
+        
+        def _execute_a_render_mission(self, mission):
+            """handle Model mission and do the render"""
+            if mission['add_rect']:
+                with self.canvas:
+                    Color(r(), 1, 1, mode='hsv')
+                    Rectangle(pos=(r() * self.width,
+                        r() * self.height), size=(20, 20))
+            
+        # translate keyboard command to model signal    
+        def _export_missions(self, receiver):
+            sigs = self._signal_to_model[:]
+            self._signal_to_model = []
+            return sigs
+    
+    tm = TestModel()
+    tw = TestWindow()
+    # The module that work slower shall keep the list of co-workers
+    tw.init_inout_list([tm], [tm])  
+
+    tm.start_loop()
+    runTouchApp(tw)
