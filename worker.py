@@ -4,7 +4,7 @@ import Queue
 class Worker(object):
     
     def __init__(self):
-        self.mission_queue = Queue.PriorityQueue()
+        self.mission_in = Queue.PriorityQueue()
         
         # only those worker who work faster then self
         # shall be maintained in this list
@@ -20,9 +20,12 @@ class Worker(object):
         while True:
             func()
     
-    def start_loop(self):
-        for routine in self.routines:
-            thread.start_new_thread(Worker.infinite_loop, (routine,))
+    def start_loop(self, new_thread=False):
+        if new_thread:
+            for routine in self.routines:
+                thread.start_new_thread(Worker.infinite_loop, (routine,))
+        else:
+            Worker.infinite_loop(routine)
 
     # Do something actively
     def routine(self):
@@ -42,7 +45,7 @@ class Worker(object):
     def add_todo(self, mission):
         """Assign jobs to self by slow up-stream co-workers"""
         if mission != {}:
-            self.mission_queue.put(mission)
+            self.mission_in.put(mission)
         else:
             return
         
@@ -63,6 +66,6 @@ class Worker(object):
         raise NotImplementedError("Please Implement " + self.__class__.__name__ + "._export_missions()")
 
     def _routine(self):
-        """Pop and execute commands queued in self.mission_queue"""
+        """Pop and execute commands queued in self.mission_in"""
         raise NotImplementedError("Please Implement " + self.__class__.__name__ + ".routine()")
         

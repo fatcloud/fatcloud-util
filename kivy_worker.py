@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 '''
-KivyGUI is a base class that meant to be inherited to create app
-that convert keyboard event to "Model" signal and grab render
-command back when it is ready to update the next frame
+KivyWorker integrates kivy framework and class Worker
+
+Open file \"kivy_worker.py\" and scroll down to see sample code
+press space bar to test the sample
 '''
 
 import thread
@@ -12,7 +13,7 @@ import time
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from random import random as r
-from kivy.clock import Clock
+from kivy.clock import Clock, mainthread
 from kivy.core.window import Window
 from kivy.base import runTouchApp
 
@@ -30,6 +31,22 @@ class KivyWorker(Widget, Worker):
         
         # OutputExecutor
         Clock.schedule_interval(self.__update_frame, 1.0/60.0)
+        
+        self._mission_out = []
+
+
+    #============================= TODO =================================
+        
+    def _execute_a_keyboard_mission(self, mission):
+        """Handle Keyboard mission and be prepared to _export_mission(model)"""
+        raise NotImplementedError("Please Implement " + self.__class__.__name__ + "._execute_a_keyboard_mission()")
+    
+    def _execute_a_render_mission(self, mission):
+        """handle Model mission and do the render"""
+        raise NotImplementedError("Please Implement " + self.__class__.__name__ + "._execute_a_render_mission()")
+
+    #====================================================================
+
 
     # Pseudo co-worker
     def __on_key_down(self, keyboard, key_code, text, modifiers):
@@ -40,7 +57,7 @@ class KivyWorker(Widget, Worker):
         mission = {'immediate':True}
         mission.update(key_info)
         self.add_todo(mission)
-            
+    
     def __update_frame(self, dt):
         self.routine()
 
@@ -49,23 +66,33 @@ class KivyWorker(Widget, Worker):
         self._keyboard = None
 
     def _routine(self):
-        while not self.mission_queue.empty():
-            mission = self.mission_queue.get_nowait()
+        while not self.mission_in.empty():
+            mission = self.mission_in.get_nowait()
             if 'key_code' in mission:
                 self._execute_a_keyboard_mission(mission)
             else:
                 self._execute_a_render_mission(mission)
         
-    def _execute_a_keyboard_mission(self, mission):
-        """Handle Keyboard mission and be prepared to _export_mission(model)"""
-        raise NotImplementedError("Please Implement " + self.__class__.__name__ + "._execute_a_keyboard_mission()")
+    def start_loop(self, new_thread=False):
+        if new_thread:
+            print "Warning: kivy apps cannot run in any thread other then mainthread,"\
+                   "thus " + self.__class__.__name__ + ".start_loop() is running in blocking mode"\
+                   "the parameter \"new_thread=True\" passed in "+ self.__class__.__name__ + ".start_loop(new_thread=True)"\
+                   " is invalid and disabled."
+        runTouchApp(self)
+
+    def _put_mission_out(self, mission):
+        self._mission_out.append(mission)
     
-    def _execute_a_render_mission(self, mission):
-        """handle Model mission and do the render"""
-        raise NotImplementedError("Please Implement " + self.__class__.__name__ + "._execute_a_render_mission()")
+    def _export_missions(self, receiver):
+        missions = self._mission_out[:]
+        self._mission_out = []
+        return missions
+
+
         
-
-
+# ========================== Test + sample code =============================
+        
 if __name__ == '__main__':
     print __doc__
     
@@ -76,7 +103,7 @@ if __name__ == '__main__':
             self._add_sqrt = 0
 
         def _routine(self):
-            missions = self.mission_queue
+            missions = self.mission_in
             while not missions.empty():
                 mission = missions.get_nowait()
                 self._add_sqrt += mission['show square']
@@ -93,15 +120,14 @@ if __name__ == '__main__':
 
         def __init__(self):
             super(TestWindow, self).__init__()
-            self._signal_to_model = []
 
         def _execute_a_keyboard_mission(self, mission):
             key_code = mission['key_code']
-            if key_code[1] == 'up':
+            if key_code[1] == 'spacebar':
                 sig = {'show square':1}
             else:
                 exit()
-            self._signal_to_model.append(sig)
+            self._put_mission_out(sig)
         
         def _execute_a_render_mission(self, mission):
             """handle Model mission and do the render"""
@@ -110,17 +136,12 @@ if __name__ == '__main__':
                     Color(r(), 1, 1, mode='hsv')
                     Rectangle(pos=(r() * self.width,
                         r() * self.height), size=(20, 20))
-            
-        # translate keyboard command to model signal    
-        def _export_missions(self, receiver):
-            sigs = self._signal_to_model[:]
-            self._signal_to_model = []
-            return sigs
+
     
     tm = TestModel()
     tw = TestWindow()
     # The module that work slower shall keep the list of co-workers
     tw.init_inout_list([tm], [tm])  
 
-    tm.start_loop()
-    runTouchApp(tw)
+    tm.start_loop(new_thread=True)
+    tw.start_loop()
